@@ -24,6 +24,17 @@ import os
 import argparse
 import ssl
 import datetime
+from selenium import webdriver
+
+# chrome driver setup
+options = webdriver.ChromeOptions()
+# MacOS
+# options.binary_location = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+# Linux
+options.binary_location = '/usr/bin/google-chrome-stable'
+options.add_argument('headless')
+options.add_argument('window-size=1200x600')
+driver = webdriver.Chrome(chrome_options=options)
 
 # Taking command line arguments from users
 parser = argparse.ArgumentParser()
@@ -102,6 +113,32 @@ def download_page(url):
         except:
             return "Page Not found"
 
+def download_pagev2(url):
+    driver.get(url)
+    scroll_down(driver)
+    elem = driver.find_element_by_xpath("//*")
+    page = elem.get_attribute("outerHTML")
+    return page
+
+def scroll_down(driver):
+    SCROLL_PAUSE_TIME = 1
+
+    # Get scroll height
+    last_height = driver.execute_script("return document.body.scrollHeight")
+
+    while True:
+        print("scroll down event")
+        # Scroll down to bottom
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+
+        # Wait to load page
+        time.sleep(SCROLL_PAUSE_TIME)
+
+        # Calculate new scroll height and compare with last scroll height
+        new_height = driver.execute_script("return document.body.scrollHeight")
+        if new_height == last_height:
+            break
+        last_height = new_height
 
 # Finding 'Next Image' from the given raw page
 def _images_get_next_item(s):
@@ -230,7 +267,8 @@ else:
             url = args.url
         else:
             url = 'https://www.google.com/search?q=' + quote(search_term) + '&espv=2&biw=1366&bih=667&site=webhp&source=lnms&tbm=isch' + params + '&sa=X&ei=XosDVaCXD8TasATItgE&ved=0CAcQ_AUoAg'
-        raw_html = (download_page(url))
+        raw_html = (download_pagev2(url))
+#         print(raw_html)
         time.sleep(0.1)
         items = items + (_images_get_all_items(raw_html))
         print("Total Image Links = " + str(len(items)))
