@@ -26,14 +26,19 @@ import ssl
 import datetime
 from selenium import webdriver
 
-# chrome driver setup
+http_proxy="localhost:8118"
+
 options = webdriver.ChromeOptions()
 # MacOS
-# options.binary_location = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+options.binary_location = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 # Linux
-options.binary_location = '/usr/bin/google-chrome-stable'
+# options.binary_location = '/usr/bin/google-chrome-stable'
+
+# comment headless argument for debugging/ visualization
 options.add_argument('headless')
 options.add_argument('window-size=1200x600')
+# add proxy, restarting chrome needed if not work
+options.add_argument('--proxy-server={0}'.format(http_proxy))
 driver = webdriver.Chrome(chrome_options=options)
 
 # Taking command line arguments from users
@@ -62,8 +67,9 @@ if args.keywords:
 # setting limit on number of images to be downloaded
 if args.limit:
     limit = int(args.limit)
-    if int(args.limit) >= 100:
-        limit = 100
+# no more limit    
+#    if int(args.limit) >= 100:
+#        limit = 100
 else:
     limit = 100
 
@@ -133,6 +139,13 @@ def scroll_down(driver):
 
         # Wait to load page
         time.sleep(SCROLL_PAUSE_TIME)
+        
+        # Click show more button if any
+        show_more_btn = driver.find_element_by_css_selector('#smb')
+        try:
+            show_more_btn.click()
+        except:
+            x = 0
 
         # Calculate new scroll height and compare with last scroll height
         new_height = driver.execute_script("return document.body.scrollHeight")
@@ -268,7 +281,6 @@ else:
         else:
             url = 'https://www.google.com/search?q=' + quote(search_term) + '&espv=2&biw=1366&bih=667&site=webhp&source=lnms&tbm=isch' + params + '&sa=X&ei=XosDVaCXD8TasATItgE&ved=0CAcQ_AUoAg'
         raw_html = (download_pagev2(url))
-#         print(raw_html)
         time.sleep(0.1)
         items = items + (_images_get_all_items(raw_html))
         print("Total Image Links = " + str(len(items)))
@@ -285,7 +297,9 @@ else:
 
         ## To save imges to the same directory
         # IN this saving process we are just skipping the URL if there is any error
-        k = 0
+        k = 0      
+        if len(items) < limit:
+            limit = len(items)
         while (k < limit):
             try:
                 req = Request(items[k], headers={
@@ -339,3 +353,6 @@ else:
 
 # ----End of the main program ----#
 # In[ ]:
+
+# close chrome driver by calling quit()
+driver.quit()
