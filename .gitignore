@@ -1,2 +1,5 @@
 .DS_Store
 todo.txt
+.ipynb_checkpoints
+downloads
+logs

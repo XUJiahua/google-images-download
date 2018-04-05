@@ -24,22 +24,75 @@ import os
 import argparse
 import ssl
 import datetime
+from bs4 import BeautifulSoup
+import json
 from selenium import webdriver
 
-http_proxy="localhost:8118"
+# ref: https://stackoverflow.com/questions/20986631/how-can-i-scroll-a-web-page-using-selenium-webdriver-in-python
+def scroll_down_to_bottom(driver):
+    SCROLL_PAUSE_TIME = 1
 
-options = webdriver.ChromeOptions()
-# MacOS
-options.binary_location = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-# Linux
-# options.binary_location = '/usr/bin/google-chrome-stable'
+    # Get scroll height
+    last_height = driver.execute_script("return document.body.scrollHeight")
 
-# comment headless argument for debugging/ visualization
-options.add_argument('headless')
-options.add_argument('window-size=1200x600')
-# add proxy, restarting chrome needed if not work
-options.add_argument('--proxy-server={0}'.format(http_proxy))
-driver = webdriver.Chrome(chrome_options=options)
+    while True:
+#         print("scroll down event")
+        # Scroll down to bottom
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+
+        # Wait to load page
+        time.sleep(SCROLL_PAUSE_TIME)
+        
+        # Click show more button if any
+        show_more_btn = driver.find_element_by_css_selector('#smb')
+        try:
+#             print(show_more_btn.get_attribute("outerHTML"))
+            show_more_btn.click()
+        except:
+            x = 0
+
+        # Calculate new scroll height and compare with last scroll height
+        new_height = driver.execute_script("return document.body.scrollHeight")
+        if new_height == last_height:
+            break
+        last_height = new_height
+
+def download_page_internal(driver, url):
+    driver.get(url)
+    scroll_down_to_bottom(driver)
+    elem = driver.find_element_by_xpath("//*")
+    page = elem.get_attribute("outerHTML")
+    return page
+
+def get_image_urls_from_html(raw_html):
+    soup = BeautifulSoup(raw_html, "lxml")
+    divs = soup.find_all('div', class_='rg_meta notranslate')
+    return [json.loads(div.text)['ou'] for div in divs]
+
+def get_all_items_from_url(url):
+    try:
+        options = webdriver.ChromeOptions()
+        # MacOS
+        # options.binary_location = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+        # Linux chrome binary
+        options.binary_location = '/usr/bin/google-chrome-stable'
+        # comment headless argument for debugging/ visualization
+        options.add_argument('headless')
+        options.add_argument('window-size=1200x600')
+
+        # add proxy, restarting chrome needed if not work
+        http_proxy="localhost:8123"
+        options.add_argument('--proxy-server={0}'.format(http_proxy))
+
+        driver = webdriver.Chrome(chrome_options=options)
+    
+        raw_html = download_page_internal(driver, url)
+        return get_image_urls_from_html(raw_html)
+    except:
+        return []
+    finally:
+        # close chrome driver by calling quit()
+        driver.quit()
 
 # Taking command line arguments from users
 parser = argparse.ArgumentParser()
@@ -67,9 +120,6 @@ if args.keywords:
 # setting limit on number of images to be downloaded
 if args.limit:
     limit = int(args.limit)
-# no more limit    
-#    if int(args.limit) >= 100:
-#        limit = 100
 else:
     limit = 100
 
@@ -87,100 +137,6 @@ if args.delay:
         val = int(args.delay)
     except ValueError:
         parser.error('Delay parameter should be an integer!')
-
-# Downloading entire Web Document (Raw Page Content)
-def download_page(url):
-    version = (3, 0)
-    cur_version = sys.version_info
-    if cur_version >= version:  # If the Current Version of Python is 3.0 or above
-        try:
-            headers = {}
-            headers[
-                'User-Agent'] = "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36"
-            req = urllib.request.Request(url, headers=headers)
-            resp = urllib.request.urlopen(req)
-            respData = str(resp.read())
-            return respData
-        except Exception as e:
-            print(str(e))
-    else:  # If the Current Version of Python is 2.x
-        try:
-            headers = {}
-            headers[
-                'User-Agent'] = "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"
-            req = urllib2.Request(url, headers=headers)
-            try:
-                response = urllib2.urlopen(req)
-            except URLError:  # Handling SSL certificate failed
-                context = ssl._create_unverified_context()
-                response = urlopen(req, context=context)
-            page = response.read()
-            return page
-        except:
-            return "Page Not found"
-
-def download_pagev2(url):
-    driver.get(url)
-    scroll_down(driver)
-    elem = driver.find_element_by_xpath("//*")
-    page = elem.get_attribute("outerHTML")
-    return page
-
-def scroll_down(driver):
-    SCROLL_PAUSE_TIME = 1
-
-    # Get scroll height
-    last_height = driver.execute_script("return document.body.scrollHeight")
-
-    while True:
-        print("scroll down event")
-        # Scroll down to bottom
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-
-        # Wait to load page
-        time.sleep(SCROLL_PAUSE_TIME)
-        
-        # Click show more button if any
-        show_more_btn = driver.find_element_by_css_selector('#smb')
-        try:
-            show_more_btn.click()
-        except:
-            x = 0
-
-        # Calculate new scroll height and compare with last scroll height
-        new_height = driver.execute_script("return document.body.scrollHeight")
-        if new_height == last_height:
-            break
-        last_height = new_height
-
-# Finding 'Next Image' from the given raw page
-def _images_get_next_item(s):
-    start_line = s.find('rg_di')
-    if start_line == -1:  # If no links are found then give an error!
-        end_quote = 0
-        link = "no_links"
-        return link, end_quote
-    else:
-        start_line = s.find('"class="rg_meta"')
-        start_content = s.find('"ou"', start_line + 1)
-        end_content = s.find(',"ow"', start_content + 1)
-        content_raw = str(s[start_content + 6:end_content - 1])
-        return content_raw, end_content
-
-
-# Getting all links with the help of '_images_get_next_image'
-def _images_get_all_items(page):
-    items = []
-    while True:
-        item, end_content = _images_get_next_item(page)
-        if item == "no_links":
-            break
-        else:
-            items.append(item)  # Append all the links in the list named 'Links'
-            time.sleep(0.1)  # Timer could be used to slow down the request for image downloads
-            page = page[end_content:]
-    return items
-
 
 #Building URL parameters
 def build_url_parameters():
@@ -280,9 +236,7 @@ else:
             url = args.url
         else:
             url = 'https://www.google.com/search?q=' + quote(search_term) + '&espv=2&biw=1366&bih=667&site=webhp&source=lnms&tbm=isch' + params + '&sa=X&ei=XosDVaCXD8TasATItgE&ved=0CAcQ_AUoAg'
-        raw_html = (download_pagev2(url))
-        time.sleep(0.1)
-        items = items + (_images_get_all_items(raw_html))
+        items = items + (get_all_items_from_url(url))
         print("Total Image Links = " + str(len(items)))
 
         # This allows you to write all the links into a test file. This text file will be created in the same directory as your code. You can comment out the below 3 lines to stop writing the output to the text file.
@@ -354,5 +308,3 @@ else:
 # ----End of the main program ----#
 # In[ ]:
 
-# close chrome driver by calling quit()
-driver.quit()
