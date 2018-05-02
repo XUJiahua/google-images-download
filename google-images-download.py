@@ -27,6 +27,7 @@ import datetime
 from bs4 import BeautifulSoup
 import json
 from selenium import webdriver
+import redis
 
 # ref: https://stackoverflow.com/questions/20986631/how-can-i-scroll-a-web-page-using-selenium-webdriver-in-python
 def scroll_down_to_bottom(driver):
@@ -99,6 +100,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-k', '--keywords', help='delimited list input', type=str, required=False)
 parser.add_argument('-u', '--url', help='search with google image URL', type=str, required=False)
 parser.add_argument('-l', '--limit', help='delimited list input', type=str, required=False)
+parser.add_argument('-z', '--redis_list', help='dump image urls to redis list', type=str, required=False)
 parser.add_argument('-x', '--single_image', help='downloading a single image from URL', type=str, required=False)
 parser.add_argument('-o', '--output_directory', help='download images in a specific directory', type=str, required=False)
 parser.add_argument('-d', '--delay', help='delay in seconds to wait between downloading two images', type=str, required=False)
@@ -114,6 +116,7 @@ parser.add_argument('-w', '--time', help='image age', type=str, required=False,
                     choices=['past-24-hours','past-7-days'])
 
 args = parser.parse_args()
+
 
 if args.keywords:
     search_keyword = [str(item) for item in args.keywords.split(',')]
@@ -247,6 +250,14 @@ else:
         t1 = time.time()  # stop the timer
         total_time = t1 - t0  # Calculating the total time required to crawl, find and download all the links of 60,000 images
         print("Total time taken: " + str(total_time) + " Seconds")
+
+
+        if args.redis_list is not None:
+            r = redis.Redis()
+            for e in items:
+                r.lpush(args.redis_list, json.dumps({'label': args.keywords, 'url': e}))
+            sys.exit(0)
+
         print("Starting Download...")
 
         ## To save imges to the same directory
